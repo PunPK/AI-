@@ -18,6 +18,32 @@ def Set_FRANE(cap) :
     print("Resolution:", width, "x", height)
     print("FPS:", fps)
 
+def cropped_frame(frames) :
+    # คำนวณตำแหน่งที่ต้องตัดวิดีโอเพื่อให้อยู่ตรงกลางของ 1080p
+    width = frames.shape[1]
+    height = frames.shape[0]
+    
+    start_x = int((width - 640) / 2)
+    start_y = int((height - 480) / 2)
+    end_x = start_x + 640
+    end_y = start_y + 480
+
+    # ตัดขนาดวิดีโอ
+    cropped_frame = frames[start_y:end_y, start_x:end_x]
+
+    return cropped_frame
+
+def startMo(start_time) :
+    while True:
+        # ตรวจสอบว่าผ่านไปเวลา 1 นาทีหรือไม่
+        if time.time() - start_time > 60:
+            break
+    
+        k = cv2.waitKey(5)
+        if k != -1:
+            # ถ้ามีการกดปุ่มใดๆ ให้เริ่มทำงานต่อไป
+            break
+
 def face_MO(frame) :
     face_locations = face_recognition.face_locations(frame)
     #face_encodings = face_recognition.face_encodings(frame, face_locations)
@@ -46,26 +72,28 @@ def face_MO(frame) :
 
         # Detects mouth 
         #mouth = mouth_cascade.detectMultiScale(roi_color, scaleFactor = 1.8, minNeighbors = 20)  
-        mouth = mouth_cascade.detectMultiScale(roi_color, scaleFactor = 2.2, minNeighbors = 30)  
+        ##mouth = mouth_cascade.detectMultiScale(roi_color, scaleFactor = 2.2, minNeighbors = 30)  
   
         #draw a rectangle in mouth
-        for (mx,my,mw,mh) in mouth: 
-            cv2.rectangle(roi_color,(mx,my),(mx+mw,my+mh),(120,60,222),2) 
+        ##for (mx,my,mw,mh) in mouth: 
+        ##    cv2.rectangle(roi_color,(mx,my),(mx+mw,my+mh),(120,60,222),2) 
+        mouth = mouth_cascade.detectMultiScale(roi_color, scaleFactor=2.2, minNeighbors=30)
 
-def Updated_FPS(cap):
-    current_fps = cap.get(cv2.CAP_PROP_FPS)
-    print("Current FPS:", current_fps)
-
-    # Set the desired FPS value
-    desired_fps = 60
-
-    # Set the desired FPS of the webcam
-    cap.set(cv2.CAP_PROP_FPS, desired_fps)
-
-    # Print the updated FPS of the webcam
-    updated_fps = cap.get(cv2.CAP_PROP_FPS)
-    print("Updated FPS:", updated_fps)
-
+        # เลือกจุดที่ใหญ่ที่สุด (ปากคนเดียว)
+        if len(mouth) > 0:
+            for (mx,my,mw,mh) in mouth:
+                mx = mx
+                my = my
+                mw = mw
+                mh = mh
+            #(mx, my, mw, mh) = max(mouth, key=lambda rect: rect[2] * rect[3])
+        else :
+                mx = mx
+                my = my
+                mw = mw
+                mh = mh
+        # วาดกรอบแค่จุดเดียว
+        cv2.rectangle(roi_color, (mx, my), (mx + mw, my + mh), (120, 60, 222), 2)
 
 #=========================================================================================================#
 
@@ -77,11 +105,12 @@ mouth_cascade = cv2.CascadeClassifier("haarcascade_smile.xml")
 cap = cv2.VideoCapture(2) 
 
 #Set_FRANE(cap)
-#Updated_FPS(cap)
 
 # ตัวแปรสำหรับคำนวณ FPS
 start_time = time.time()
 frame_count = 0
+
+#startMo(start_time)
 
 print("-------------------------------------------")
 print("------------start Ai_sleepdiver------------")
@@ -89,11 +118,13 @@ print("-------------------------------------------")
 
 # loop 
 while 1:  
-  
     # reads frames from a camera 
     ret, frame = cap.read()  
 
-    face_MO(frame)
+    # cropped frames from a camera 
+    #frame = cropped_frame(frame)
+
+    #face_MO(frame)
 
     # Display
     cv2.imshow('Ai_sleepdiver',frame) 
@@ -105,7 +136,7 @@ while 1:
         start_time = time.time()
         frame_count = 0
   
-    k = cv2.waitKey(5) # Wait Esc to stop 
+    k = cv2.waitKey(5) # Wait Esc to stop  
     if k == 27: 
         print("-------------------------------------------")
         print("------------close Ai_sleepdiver------------")
@@ -117,3 +148,6 @@ cap.release()
   
 # De-allocate any associated memory usage 
 cv2.destroyAllWindows()
+
+
+#----------------------------------------------------------
