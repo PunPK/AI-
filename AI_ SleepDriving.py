@@ -5,12 +5,15 @@ import time
 import utils, math
 import numpy as np
 import keyboard
+import pandas as pd
+import face_recognition
 # Fast Ai
 from fastbook import *
 from glob import glob
 from pathlib import Path
 from sklearn.metrics import precision_recall_fscore_support, accuracy_score, roc_auc_score
 import pathlib
+import PIL
 
 temp = pathlib.PosixPath
 pathlib.PosixPath = pathlib.WindowsPath
@@ -27,12 +30,10 @@ FONTS = cv.FONT_HERSHEY_COMPLEX
 
 # Face bounder indices 
 FACE_OVAL = [10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379, 378, 400, 377, 152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109]
-
 # Lips indices for landmarks
 LIPS = [61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 308, 324, 318, 402, 317, 14, 87, 178, 88, 95, 185, 40, 39, 37, 0, 267, 269, 270, 409, 415, 310, 311, 312, 13, 82, 81, 42, 183, 78]
 # Left eyes indices 
 LEFT_EYE = [362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385, 384, 398]
-
 # Right eyes indices
 RIGHT_EYE = [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246]  
 
@@ -89,6 +90,61 @@ def euclideanDistance(point, point1):
     distance = math.sqrt((x1 - x)**2 + (y1 - y)**2)
     return distance
 
+def start_mode(camera) :
+    for i in range(1, 61):
+        time.sleep(1)
+        print("---------------------------------------------------------------------")
+        print("Ai_sleepdiver : ")
+        print("1.) press the 'q' or 'Q' button to close the program")
+        print("2.) press the 's' or 'S' button to start the program")
+        print("Time:", i ,"S ... if Time >= 60 : Ai_sleepdiver will stop working")
+        
+        if i >= 60:
+            print("-------------------------------------------")
+            print("------------close Ai_sleepdiver------------")
+            print("-------------------------------------------")
+            cv.destroyAllWindows()
+            camera.release()
+            break
+
+        if keyboard.is_pressed('q') or keyboard.is_pressed('Q') or keyboard.is_pressed('ๆ') :
+            print("-------------------------------------------")
+            print("------------close Ai_sleepdiver------------")
+            print("-------------------------------------------")
+            cv.destroyAllWindows()
+            camera.release()
+            break
+
+        if keyboard.is_pressed('s') or keyboard.is_pressed('S') or keyboard.is_pressed('ห'):
+            print("-------------------------------------------")
+            print("------------start Ai_sleepdiver------------")
+            print("-------------------------------------------")
+            break
+
+# FACE detection function 
+def detectFACE(img, landmarks, FACE):
+    # FACE coordinates
+    FACE_points = [landmarks[idx] for idx in FACE]
+
+    # Find the minimum and maximum x and y coordinates of the FACE points
+    x_values = [point[0] for point in FACE_points]
+    y_values = [point[1] for point in FACE_points]
+    FACE_x_min = min(x_values)
+    FACE_x_max = max(x_values)
+    FACE_y_min = min(y_values)
+    FACE_y_max = max(y_values)
+
+    # Increase width and height of the rectangle
+    width_increase = 25
+    height_increase = 15
+    FACE_x_min -= width_increase
+    FACE_x_max += width_increase
+    FACE_y_min -= height_increase
+    FACE_y_max += height_increase
+
+    # Draw rectangle around lips
+    cv.rectangle(img, (FACE_x_min, FACE_y_min), (FACE_x_max, FACE_y_max), utils.GREEN, 2)
+
 def detecteye(img, landmarks, right_indices, left_indices):
     # Right eye
     # Horizontal line 
@@ -134,21 +190,47 @@ def detecteye(img, landmarks, right_indices, left_indices):
     eye_left_y_min -= width_increase
     eye_left_y_max += width_increase
 
-    # Draw rectangle around left eye
-    cv.rectangle(img, (eye_left_x_min, eye_left_y_min), (eye_left_x_max, eye_left_y_max), utils.GREEN, 2)
+    if eye_right_x_min >= 0 and eye_right_y_min >= 0 and (eye_right_x_max - eye_right_x_min) > 0 and (eye_right_y_max - eye_right_y_min) > 0:
+        # Draw rectangle around left eye
+        cv.rectangle(img, (eye_right_x_min, eye_right_y_min), (eye_right_x_max, eye_right_y_max), utils.GREEN, 2)
 
-    # Crop eye regions from the image based on the rectangles
-    eye_right_image = img[eye_right_y_min:eye_right_y_max, eye_right_x_min:eye_right_x_max]
-    eye_left_image = img[eye_left_y_min:eye_left_y_max, eye_left_x_min:eye_left_x_max]
+        # Crop eye regions from the image based on the rectangles
+        eye_right_image = img[eye_right_y_min:eye_right_y_max, eye_right_x_min:eye_right_x_max]
 
-    # Perform prediction on cropped eye regions
-    re_right = learn_inf_eye.predict(eye_right_image)
-    re_left = learn_inf_eye.predict(eye_left_image)
+        try:
+            # Perform prediction on cropped eye regions
+            re_right = learn_inf_eye.predict(eye_right_image)
+            print("Eye right:", re_right)
+            re_right_m = re_right[0]
+        except (ValueError, PIL.Image.DecompressionBombError):
+            # Handle the specific error and return None
+            re_right_m = None
+    else:
+        # Mouth region is not valid, return None or any appropriate value
+        re_right_m = None
+    
+    if eye_left_x_min >= 0 and eye_left_y_min >= 0 and (eye_left_x_max - eye_left_x_min) > 0 and (eye_left_y_max - eye_left_y_min) > 0:
+        # Draw rectangle around left eye
+        cv.rectangle(img, (eye_left_x_min, eye_left_y_min), (eye_left_x_max, eye_left_y_max), utils.GREEN, 2)
 
-    print("Eye right:", re_right)
-    print("Eye left:", re_left)
+        # Crop eye regions from the image based on the rectangles
+        eye_left_image = img[eye_left_y_min:eye_left_y_max, eye_left_x_min:eye_left_x_max]
 
-    return(re_right[0],re_left[0])
+        try:
+            # Perform prediction on cropped eye regions
+            re_left = learn_inf_eye.predict(eye_left_image)
+            print("Eye left:", re_left)
+            re_left_m = re_left[0]
+        except (ValueError, PIL.Image.DecompressionBombError):
+            # Handle the specific error and return None
+            re_left_m = None
+    else:
+        # Mouth region is not valid, return None or any appropriate value
+        re_left_m = None
+    
+
+    return(re_right_m,re_left_m)
+
 # Yawn detection function 
 def detectYawn(img, landmarks, LIPS):
     # Lips coordinates
@@ -170,46 +252,47 @@ def detectYawn(img, landmarks, LIPS):
     lips_y_min -= height_increase
     lips_y_max += height_increase
 
-    # Draw rectangle around lips
-    cv.rectangle(img, (lips_x_min, lips_y_min), (lips_x_max, lips_y_max), utils.GREEN, 2)
+    if lips_x_min >= 0 and lips_y_min >= 0 and (lips_x_max - lips_x_min) > 0 and (lips_y_max - lips_y_min) > 0:
+        # Draw rectangle around lips
+        cv.rectangle(img, (lips_x_min, lips_y_min), (lips_x_max, lips_y_max), utils.GREEN, 2)
 
-    Yawn_image = img[lips_y_min:lips_y_max, lips_x_min:lips_x_max]
-
-    # Perform prediction on cropped eye regions
-    re_yawn = learn_inf_yawn.predict(Yawn_image)
-    print("Yarw :", re_yawn)
-    return re_yawn[0]
+        Yawn_image = img[lips_y_min:lips_y_max, lips_x_min:lips_x_max]
+        try:
+            # Perform prediction on cropped mouth region
+            re_yawn = learn_inf_yawn.predict(Yawn_image)
+            print("Yawn: ", re_yawn)
+            return re_yawn[0]
+        except (ValueError, PIL.Image.DecompressionBombError):
+            # Handle the specific error and return None
+            return None
+    else:
+        # Mouth region is not valid, return None or any appropriate value
+        return None
 
 #=================================================Start========================================================================#
+# Variables for counting
+blink_right_counter = 0
+blink_left_counter = 0
+yawn_counter = 0
+blink_right = 0
+blink_left = 0
+
+# Data list for storing results
+data = []
+
+Blinks_right_start = 10
+Blinks_left_start = 10
+Yawn_start = 10
+
+data.append({'Frame': frame_counter, 'Blinks_right': Blinks_right_start, 'Blinks_left': Blinks_left_start, 'Yawns': Yawn_start})
+
 with map_face_mesh.FaceMesh(min_detection_confidence=0.5, min_tracking_confidence=0.5) as face_mesh:
     # Starting time
     # ตัวแปรสำหรับคำนวณ FPS
     start_time = time.time()
     frame_count = 0
     #Set_FRANE(camera)
-    for i in range(1, 61):
-        time.sleep(1)
-        print("---------------------------------------------------------------------")
-        print("Ai_sleepdiver : ")
-        print("1.) press the 'q' or 'Q' button to close the program")
-        print("2.) press the 's' or 'S' button to start the program")
-        print("Time:", i ,"S ... if Time >= 60 : Ai_sleepdiver will stop working")
-        
-        if i >= 60:
-            cv.destroyAllWindows()
-            camera.release()
-            break
-
-        if keyboard.is_pressed('q') or keyboard.is_pressed('Q'):
-            cv.destroyAllWindows()
-            camera.release()
-            break
-
-        if keyboard.is_pressed('s') or keyboard.is_pressed('S'):
-            print("-------------------------------------------")
-            print("------------start Ai_sleepdiver------------")
-            print("-------------------------------------------")
-            break
+    #start_mode(camera)
 
     # Starting video loop
     while True:
@@ -224,7 +307,7 @@ with map_face_mesh.FaceMesh(min_detection_confidence=0.5, min_tracking_confidenc
         frame_height, frame_width = frame.shape[:2]
         rgb_frame = cv.cvtColor(frame, cv.COLOR_RGB2BGR)
         results = face_mesh.process(rgb_frame)
-        
+
         if results.multi_face_landmarks:
             mesh_coords = landmarksDetection(frame, results, False)
             # Eye and yawn detection
@@ -232,10 +315,30 @@ with map_face_mesh.FaceMesh(min_detection_confidence=0.5, min_tracking_confidenc
             #detectEyes(frame, gray)
             re_right,re_left = detecteye(frame, mesh_coords, RIGHT_EYE, LEFT_EYE)
             re_yawn = detectYawn(frame, mesh_coords,LIPS)
-
+            #detectFACE(frame, mesh_coords, FACE_OVAL)
             frame = utils.textWithBackground(frame, f'Eye right : {re_right}', FONTS, 1.0, (30, 100), bgOpacity=0.9, textThickness=2)
             frame = utils.textWithBackground(frame, f'Eye left  : {re_left}', FONTS, 1.0, (30, 150), bgOpacity=0.9, textThickness=2)
             frame = utils.textWithBackground(frame, f'Yawn : {re_yawn}', FONTS, 1.0, (30, 200), bgOpacity=0.9, textThickness=2)
+            # Count blinks
+            if re_right == 'close eye' :
+                blink_right += 1
+            if re_left == 'close eye':
+                blink_left += 1
+            
+            if blink_right >= 3 :
+                blink_right_counter += 1
+                blink_right = 0
+            if blink_left >= 3 :
+                blink_left_counter += 1
+                blink_left = 0
+
+            # Count yawns
+            if re_yawn == 'yawn':
+                yawn_counter += 1
+
+            frame = utils.textWithBackground(frame, f'Sum Eye right : {blink_right_counter}', FONTS, 1.0, (600, 100), bgOpacity=0.9, textThickness=2)
+            frame = utils.textWithBackground(frame, f'Sum Eye left  : {blink_left_counter}', FONTS, 1.0, (600, 150), bgOpacity=0.9, textThickness=2)
+            frame = utils.textWithBackground(frame, f'Sum Yawn : {yawn_counter}', FONTS, 1.0, (600, 200), bgOpacity=0.9, textThickness=2)
 
         # Calculate frame per second (FPS)
         end_time = time.time() - start_time
@@ -243,9 +346,22 @@ with map_face_mesh.FaceMesh(min_detection_confidence=0.5, min_tracking_confidenc
 
         frame = utils.textWithBackground(frame, f'FPS: {round(fps,1)}', FONTS, 1.0, (30, 50), bgOpacity=0.9, textThickness=2)
         frame = utils.textWithBackground(frame, f"Press the 'q' or 'Q' button to close the program", FONTS, 0.5, (10, 525), bgOpacity=0.45, textThickness=1)
-        cv.imshow('frame', frame)
+        
+        cv.imshow('Ai_Sleepdiver', frame)
+
         key = cv.waitKey(2)
-        if key == ord('q') or key == ord('Q'):
+        if key == ord('q') or key == ord('Q') :
+            # Store data
+            data.append({'Frame': frame_counter, 'Blinks_right': blink_right_counter, 'Blinks_left': blink_left_counter, 'Yawns': yawn_counter})
+            data.append({'Frame': frame_counter, 'Blinks_right': blink_right_counter/Blinks_right_start, 'Blinks_left': blink_left_counter/Blinks_left_start, 'Yawns': yawn_counter/Yawn_start})
+            # Create a DataFrame from the data list
+            df = pd.DataFrame(data)
+            df = df.rename(index={0: "Start"})
+            df = df.rename(index={1: "Work"})
+            df = df.rename(index={2: "Summarize"})
+
+            # Print the DataFrame
+            print(df)
             print("-------------------------------------------")
             print("------------close Ai_sleepdiver------------")
             print("-------------------------------------------")
