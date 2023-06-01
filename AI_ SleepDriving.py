@@ -39,7 +39,8 @@ RIGHT_EYE = [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 
 
 map_face_mesh = mp.solutions.face_mesh
 # Camera object 
-camera = cv.VideoCapture(0)
+video = cv.VideoCapture(0)
+#video = cv2.VideoCapture("test.mp4") 
 
 # Landmark detection function 
 def Set_FRANE(cap) :
@@ -273,9 +274,10 @@ def detectYawn(img, landmarks, LIPS):
 # Variables for counting
 blink_right_counter = 0
 blink_left_counter = 0
-yawn_counter = 0
+yawn_counter = 2
 blink_right = 0
 blink_left = 0
+re_yawn_counter = 0 
 
 # Data list for storing results
 data = []
@@ -291,13 +293,13 @@ with map_face_mesh.FaceMesh(min_detection_confidence=0.5, min_tracking_confidenc
     # ตัวแปรสำหรับคำนวณ FPS
     start_time = time.time()
     frame_count = 0
-    #Set_FRANE(camera)
-    #start_mode(camera)
+    #Set_FRANE(video)
+    #start_mode(video)
 
     # Starting video loop
     while True:
         frame_counter += 1 # Frame counter
-        ret, frame = camera.read() # Get frame from camera
+        ret, frame = video.read() # Get frame from camera
         if not ret:
             break # No more frames, break
 
@@ -325,21 +327,24 @@ with map_face_mesh.FaceMesh(min_detection_confidence=0.5, min_tracking_confidenc
             if re_left == 'close eye':
                 blink_left += 1
             
-            if blink_right >= 3 :
+            if blink_right >= 2 :
                 blink_right_counter += 1
                 blink_right = 0
-            if blink_left >= 3 :
+            if blink_left >= 2 :
                 blink_left_counter += 1
                 blink_left = 0
 
             # Count yawns
             if re_yawn == 'yawn':
                 yawn_counter += 1
+            if yawn_counter >= 10 :
+                re_yawn_counter += 1
+                yawn_counter = 0
 
             frame = utils.textWithBackground(frame, f'Sum Eye right : {blink_right_counter}', FONTS, 1.0, (600, 100), bgOpacity=0.9, textThickness=2)
             frame = utils.textWithBackground(frame, f'Sum Eye left  : {blink_left_counter}', FONTS, 1.0, (600, 150), bgOpacity=0.9, textThickness=2)
-            frame = utils.textWithBackground(frame, f'Sum Yawn : {yawn_counter}', FONTS, 1.0, (600, 200), bgOpacity=0.9, textThickness=2)
-
+            frame = utils.textWithBackground(frame, f'Sum Yawn : {re_yawn_counter}', FONTS, 1.0, (600, 200), bgOpacity=0.9, textThickness=2)
+        
         # Calculate frame per second (FPS)
         end_time = time.time() - start_time
         fps = frame_counter / end_time
@@ -352,8 +357,13 @@ with map_face_mesh.FaceMesh(min_detection_confidence=0.5, min_tracking_confidenc
         key = cv.waitKey(2)
         if key == ord('q') or key == ord('Q') :
             # Store data
-            data.append({'Frame': frame_counter, 'Blinks_right': blink_right_counter, 'Blinks_left': blink_left_counter, 'Yawns': yawn_counter})
-            data.append({'Frame': frame_counter, 'Blinks_right': blink_right_counter/Blinks_right_start, 'Blinks_left': blink_left_counter/Blinks_left_start, 'Yawns': yawn_counter/Yawn_start})
+            data.append({'Frame': frame_counter, 'Blinks_right': blink_right_counter, 'Blinks_left': blink_left_counter, 'Yawns': re_yawn_counter})
+            data.append({
+                'Frame': frame_counter,
+                'Blinks_right': '{:.2f}%'.format(blink_right_counter / Blinks_right_start * 100),
+                'Blinks_left': '{:.2f}%'.format(blink_left_counter / Blinks_left_start * 100),
+                'Yawns': '{:.2f}%'.format(re_yawn_counter / Yawn_start * 100)
+                })
             # Create a DataFrame from the data list
             df = pd.DataFrame(data)
             df = df.rename(index={0: "Start"})
@@ -368,4 +378,4 @@ with map_face_mesh.FaceMesh(min_detection_confidence=0.5, min_tracking_confidenc
             break
 
 cv.destroyAllWindows()
-camera.release()
+video.release()
