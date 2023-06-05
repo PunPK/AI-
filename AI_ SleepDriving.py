@@ -6,7 +6,6 @@ import utils, math
 import numpy as np
 import keyboard
 import pandas as pd
-import face_recognition
 # Fast Ai
 from fastbook import *
 from glob import glob
@@ -15,11 +14,25 @@ from sklearn.metrics import precision_recall_fscore_support, accuracy_score, roc
 import pathlib
 import PIL
 
+def conv2(ni, nf): return ConvLayer(ni, nf, stride=2)
+
+class ResBlock(Module):
+  def __init__(self, nf):
+    self.conv1 = ConvLayer(nf, nf)
+    self.conv2 = ConvLayer(nf, nf)
+  
+  def forward(self, x): return x + self.conv2(self.conv1(x))
+
+def conv_and_res(ni, nf): return nn.Sequential(conv2(ni, nf), ResBlock(nf))
+
+
 temp = pathlib.PosixPath
 pathlib.PosixPath = pathlib.WindowsPath
 
+#learn_inf_eye = load_learner('2eye_ModelsfromScratch.pkl')
 learn_inf_eye = load_learner('eye_data_resnet18_fastai.pkl')
-learn_inf_yawn = load_learner('yawn_data_resnet18_fastai.pkl')
+#learn_inf_yawn = load_learner('yawn_data_resnet18_fastai.pkl')
+learn_inf_yawn = load_learner('yawn_ModelsfromScratch.pkl')
 
 # Variables 
 frame_counter = 0
@@ -247,7 +260,7 @@ def detectYawn(img, landmarks, LIPS):
 
     # Increase width and height of the rectangle
     width_increase = 25
-    height_increase = 15
+    height_increase = 20
     lips_x_min -= width_increase
     lips_x_max += width_increase
     lips_y_min -= height_increase
@@ -272,12 +285,25 @@ def detectYawn(img, landmarks, LIPS):
 
 #=================================================Start========================================================================#
 # Variables for counting
-blink_right_counter = 0
-blink_left_counter = 0
-yawn_counter = 2
-blink_right = 0
-blink_left = 0
-re_yawn_counter = 0 
+blink_right_counter = 0 
+blink_left_counter = 0  
+blink_right_counter_n = 0 
+blink_left_counter_n = 0 
+yawn_counter = 0        
+blink_right = 0         
+blink_left = 0          
+re_yawn_counter = 0     
+re_yawn_counter_n = 0  
+close_eye_right = 0
+close_eye_right_counter = 0
+close_eye_left = 0
+close_eye_left_counter = 0
+no_blink_right = 0
+no_blink_left = 0
+blink_30_right = 0
+blink_30_left = 0
+yawn_30 = 0
+danger = '0 : Alert'   
 
 # Data list for storing results
 data = []
@@ -292,7 +318,11 @@ with map_face_mesh.FaceMesh(min_detection_confidence=0.5, min_tracking_confidenc
     # Starting time
     # ตัวแปรสำหรับคำนวณ FPS
     start_time = time.time()
-    frame_count = 0
+    start_time_right = time.time()
+    start_time_left = time.time()
+    start_blink_time = time.time()
+    start_yawn_time = time.time()
+    frame_count = 0          
     #Set_FRANE(video)
     #start_mode(video)
 
@@ -321,30 +351,99 @@ with map_face_mesh.FaceMesh(min_detection_confidence=0.5, min_tracking_confidenc
             frame = utils.textWithBackground(frame, f'Eye right : {re_right}', FONTS, 1.0, (30, 100), bgOpacity=0.9, textThickness=2)
             frame = utils.textWithBackground(frame, f'Eye left  : {re_left}', FONTS, 1.0, (30, 150), bgOpacity=0.9, textThickness=2)
             frame = utils.textWithBackground(frame, f'Yawn : {re_yawn}', FONTS, 1.0, (30, 200), bgOpacity=0.9, textThickness=2)
-            # Count blinks
+            # Count blink
+            if re_right == 'open eye' :
+                elapsed_right_time = time.time() - start_time_right
+                if re_right == 'close eye':
+                    start_time_right = time.time()
+                elif elapsed_right_time >= 60 :
+                    no_blink_right += 1
+            if re_left == 'open eye' :
+                elapsed_left_time = time.time() - start_time_left
+                if re_left == 'close eye':
+                    start_time_left = time.time()
+                elif elapsed_left_time >= 60 :
+                    no_blink_left += 1
+
             if re_right == 'close eye' :
+                close_eye_right += 1
                 blink_right += 1
             if re_left == 'close eye':
+                close_eye_left += 1
                 blink_left += 1
-            
+
+            if close_eye_right >= 1 :
+                if re_right == 'open eye' :
+                    close_eye_right = 0 
+                elif close_eye_right >= 10 :
+                    close_eye_right_counter += 1
+
+            if close_eye_left >= 1 :
+                if re_left == 'open eye' :
+                    close_eye_left = 0 
+                elif close_eye_left >= 10 :
+                    close_eye_left_counter += 1
+
             if blink_right >= 2 :
                 blink_right_counter += 1
+                blink_right_counter_n += 1
                 blink_right = 0
             if blink_left >= 2 :
                 blink_left_counter += 1
                 blink_left = 0
+            
+            blink_time = time.time() - start_blink_time
+            if blink_time <= 59 :
+                if blink_right_counter_n >= 30 :
+                    blink_30_right += 1
+                if blink_left_counter_n >= 30 :
+                    blink_30_left += 1
+            elif blink_time >= 60 :
+                blink_time = time.time() - start_blink_time
+                blink_right_counter_n = 0
+                blink_left_counter_n = 0
+
 
             # Count yawns
             if re_yawn == 'yawn':
                 yawn_counter += 1
-            if yawn_counter >= 10 :
+            
+            if yawn_counter >= 6 :
                 re_yawn_counter += 1
+                re_yawn_counter_n += 1
                 yawn_counter = 0
 
-            frame = utils.textWithBackground(frame, f'Sum Eye right : {blink_right_counter}', FONTS, 1.0, (600, 100), bgOpacity=0.9, textThickness=2)
-            frame = utils.textWithBackground(frame, f'Sum Eye left  : {blink_left_counter}', FONTS, 1.0, (600, 150), bgOpacity=0.9, textThickness=2)
-            frame = utils.textWithBackground(frame, f'Sum Yawn : {re_yawn_counter}', FONTS, 1.0, (600, 200), bgOpacity=0.9, textThickness=2)
-        
+            yawn_time = time.time() - start_yawn_time
+            if yawn_time <= 59 :
+                if re_yawn_counter_n >= 3 :
+                    yawn_30 += 1
+            elif yawn_time >= 60 :
+                blink_time = time.time() - start_yawn_time
+                re_yawn_counter_n = 0
+
+            if blink_right_counter >= 5 or blink_left_counter >= 5 or re_yawn_counter == 6 or close_eye_right_counter >= 2 or close_eye_left_counter >= 2 or no_blink_right >= 4 or no_blink_left >= 4 or blink_30_left >= 4 or blink_30_right >= 4 or yawn_30 >= 4:
+                danger = '5 : Extremely Sleepy, fighting sleep'
+            elif blink_right_counter == 4 or blink_left_counter == 4 or re_yawn_counter == 5 or close_eye_right_counter == 1 or close_eye_left_counter == 1 or no_blink_right == 3 or no_blink_left == 3 or blink_30_left == 3 or blink_30_right == 3 or yawn_30 == 3:
+                danger = '4 : Sleepy, some effort to keep alert'
+            elif blink_right_counter == 3 or blink_left_counter == 3 or re_yawn_counter == 4 or no_blink_right == 2 or no_blink_left == 2 or blink_30_left >= 2 or blink_30_right == 2 or yawn_30 == 2:
+                danger = '3 : Sleepy, but no difficulty remaining awake'
+            elif blink_right_counter == 2 or blink_left_counter == 2 or re_yawn_counter == 3 or no_blink_left == 1 or no_blink_left == 1 or blink_30_left == 1 or blink_30_right == 1 or yawn_30 == 1:
+                danger = '2 : Some signs of sleepiness'
+            elif blink_right_counter == 1 or blink_left_counter == 1 or re_yawn_counter == 2 :
+                danger = '1 : Rather Alert'
+                
+            frame = utils.textWithBackground(frame, f'Degree of danger :: {danger}', FONTS, 0.5, (500, 100), bgOpacity=0.45, textThickness=1)
+            frame = utils.textWithBackground(frame, f'Sum blink Eye right    : {blink_right_counter}', FONTS, 0.5, (650, 150), bgOpacity=0.45, textThickness=1)
+            frame = utils.textWithBackground(frame, f'Sum blink Eye left     : {blink_left_counter}', FONTS, 0.5, (650, 200), bgOpacity=0.45, textThickness=1)
+            frame = utils.textWithBackground(frame, f'Sum close Eye right    : {close_eye_right_counter}', FONTS, 0.5, (650, 250), bgOpacity=0.45, textThickness=1)
+            frame = utils.textWithBackground(frame, f'Sum close Eye left     : {close_eye_left_counter}', FONTS, 0.5, (650, 300), bgOpacity=0.45, textThickness=1)
+            frame = utils.textWithBackground(frame, f'Sum no blink Eye right : {no_blink_right}', FONTS, 0.5, (650, 350), bgOpacity=0.45, textThickness=1)
+            frame = utils.textWithBackground(frame, f'Sum no blink Eye left  : {no_blink_left}', FONTS, 0.5, (650, 400), bgOpacity=0.45, textThickness=1)
+            frame = utils.textWithBackground(frame, f'Sum 30 blink Eye right : {blink_30_right}', FONTS, 0.5, (650, 450), bgOpacity=0.45, textThickness=1)
+            frame = utils.textWithBackground(frame, f'Sum 30 blink Eye left  : {blink_30_left}', FONTS, 0.5, (650, 500), bgOpacity=0.45, textThickness=1)
+            frame = utils.textWithBackground(frame, f'Sum Yawn               : {re_yawn_counter}', FONTS, 0.5, (650, 550), bgOpacity=0.45, textThickness=1)
+            frame = utils.textWithBackground(frame, f'Sum 30 Yawn            : {yawn_30}', FONTS, 0.5, (650, 600), bgOpacity=0.45, textThickness=1)
+
         # Calculate frame per second (FPS)
         end_time = time.time() - start_time
         fps = frame_counter / end_time
